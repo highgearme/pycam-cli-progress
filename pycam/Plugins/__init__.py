@@ -272,7 +272,8 @@ class PluginManager:
                     file_path = os.path.join(directory, filename)
                     spec = importlib.util.spec_from_file_location(full_mod_name, file_path)
                     if (spec is None) or (spec.loader is None):
-                        raise ImportError("Unable to load spec for plugin %s" % filename)
+                        raise ImportError("Unable to load spec for plugin %s (%s)"
+                                          % (mod_name, file_path))
                     mod = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(mod)
                 except ImportError as exc:
