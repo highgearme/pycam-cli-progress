@@ -7,7 +7,7 @@ class CLIProgress:
     def __init__(self, json_output=False, stream=None, throttle=1):
         self.json_output = json_output
         self.stream = stream or sys.stderr
-        self.throttle = max(1, int(throttle)) if throttle else 1
+        self.throttle = max(1, int(throttle or 1))
         self._last_percent = None
         self._count = None
         self._current = 0
@@ -39,6 +39,8 @@ class CLIProgress:
             print(" ".join(parts), file=self.stream, flush=True)
 
     def update(self, text=None, percent=None, **_kwargs):
+        if percent is not None:
+            percent = max(0.0, min(100.0, percent))
         if (text is None) and self._base_text:
             text = self._base_text
         if not self._should_emit(percent):
@@ -57,9 +59,12 @@ class CLIProgress:
         self._base_text = base_text
 
     def update_multiple(self):
-        if not self._count:
+        if (self._count is None) or (self._count <= 0):
             return
-        self._current = min(self._count, self._current + 1)
+        next_value = self._current + 1
+        if next_value > self._count:
+            return
+        self._current = next_value
         percent = 100 * float(self._current) / float(self._count)
         text = self._base_text
         if text:

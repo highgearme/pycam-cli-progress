@@ -23,10 +23,7 @@ class ProgressContext:
     def update(self, *args, **kwargs):
         if not self._progress:
             return False
-        try:
-            mainloop = get_mainloop()
-        except Exception:
-            mainloop = None
+        mainloop = get_mainloop()
         if mainloop is not None:
             mainloop.update()
         return self._progress.update(*args, **kwargs)
