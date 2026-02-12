@@ -138,7 +138,7 @@ class MeshDensityReducer:
             target_ratio: Target as ratio of original (e.g., 0.5 = 50% reduction)
             output_path: Output STL path (default: input_path_reduced.stl)
             aggressiveness: Higher = more aggressive reduction (recommended: 5-10)
-            max_iterations: Maximum decimation iterations
+            max_iterations: Maximum decimation iterations (unused but kept for compatibility)
 
         Returns:
             Path to reduced mesh file
@@ -172,22 +172,20 @@ class MeshDensityReducer:
             log.warning("Target count >= original count. Skipping reduction.")
             return mesh_path
 
-        reduction_ratio = 1.0 - (target_count / original_count)
+        # Calculate reduction percent for simplify_quadric_decimation
+        # (percent is how much to REMOVE, not keep)
+        percent_remove = 1.0 - (target_count / original_count)
 
         try:
-            # trimesh.simplify uses quadric error metric internally
-            mesh_simplified = mesh.simplify_quadratic_mesh(
-                target_reduction=reduction_ratio,
-                aggressiveness=aggressiveness,
-                max_iterations=max_iterations,
-                preserve_border=True,
+            # Use trimesh's QEM decimation
+            log.info(f"Applying QEM decimation (removing {percent_remove*100:.1f}%)...")
+            mesh_simplified = mesh.simplify_quadric_decimation(
+                percent=percent_remove,
+                aggression=int(aggressiveness),
             )
-        except AttributeError:
-            # Fallback for older trimesh versions
-            log.info("Using alternative simplification method...")
-            mesh_simplified = mesh.simplify_quadratic_mesh(
-                target_count=target_count
-            )
+        except Exception as e:
+            log.error(f"QEM simplification failed: {e}")
+            raise
 
         new_count = len(mesh_simplified.faces)
         log.info(
@@ -371,7 +369,9 @@ class MeshDensityReducer:
 # CLI Usage Example
 if __name__ == "__main__":
     import sys
+    import logging
 
+    # Configure logging for CLI usage
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
     )
