@@ -37,6 +37,7 @@ from pycam.Flow.parser import parse_yaml
 import pycam.Utils
 import pycam.Utils.log
 import pycam.workspace.data_models
+from pycam.Utils.progress import HeadlessProgressTracker
 
 
 _log = pycam.Utils.log.get_logger()
@@ -61,15 +62,38 @@ def get_args():
 def main_func():
     args = get_args()
     _log.setLevel(LOG_LEVELS[args.log_level])
-    for fname in args.sources:
+    
+    # Initialize headless progress tracking (if enabled via env var)
+    progress = HeadlessProgressTracker(
+        operation_id="pycam_flow",
+        total_steps=len(args.sources) + 1,  # +1 for export phase
+    )
+    progress.update(step=0, message="Initializing PyCAM flow", force=True)
+    
+    # Phase 1: Parse all YAML flow specifications
+    for i, fname in enumerate(args.sources, start=1):
         try:
+            progress.update(step=i, message=f"Parsing {fname.name if hasattr(fname, 'name') else 'flow'}")
             parse_yaml(fname)
         except pycam.errors.PycamBaseException as exc:
+            progress.error(f"Flow parse failed: {exc}")
             print("Flow description parse failure ({}): {}".format(fname, exc), file=sys.stderr)
             sys.exit(1)
+    
     pycam.Utils.set_application_key("pycam-cli")
-    for export in pycam.workspace.data_models.Export.get_collection():
-        export.run_export()
+    
+    # Phase 2: Run all exports
+    exports = list(pycam.workspace.data_models.Export.get_collection())
+    if exports:
+        progress.update(step=len(args.sources) + 1, message=f"Running {len(exports)} export(s)", force=True)
+        for export in exports:
+            try:
+                export.run_export()
+            except Exception as exc:
+                progress.error(f"Export failed: {exc}")
+                raise
+    
+    progress.complete("PyCAM flow completed successfully")
 
 
 if __name__ == "__main__":
