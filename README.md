@@ -13,6 +13,9 @@ Graphical Interface: `pycam/run_gui.py`
 
 Scripted Toolpath Processing: `pycam/run_cli.py FLOW_SPECIFICATION_FILE`
 
+Add `--progress` for human-readable CLI progress or `--json-progress` to emit JSON
+updates suitable for machine parsing.
+
 
 ## Resources
 

@@ -205,14 +205,12 @@ class ProgressContext:
             self._progress.finish()
 
     def update(self, *args, **kwargs):
+        if not self._progress:
+            return False
         mainloop = get_mainloop()
-        if mainloop is None:
-            return False
-        mainloop.update()
-        if self._progress:
-            return self._progress.update(*args, **kwargs)
-        else:
-            return False
+        if mainloop is not None:
+            mainloop.update()
+        return self._progress.update(*args, **kwargs)
 
     def set_multiple(self, count, base_text=None):
         if self._progress:

@@ -29,8 +29,12 @@ def get_mainloop(use_gtk=False):
     except IndexError:
         try:
             mainloop = GtkMainLoop()
-        except ImportError:
-            log.warning("No event loop is available")
+        except (ImportError, ValueError):
+            # GtkMainLoop may raise ValueError if gi.require_version cannot find Gtk
+            if use_gtk:
+                log.warning("No event loop is available")
+            else:
+                log.debug("No event loop is available")
             mainloop = None
         __mainloop.append(mainloop)
     return mainloop

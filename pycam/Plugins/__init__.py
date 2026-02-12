@@ -17,8 +17,8 @@ You should have received a copy of the GNU General Public License
 along with PyCAM.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-import imp
 import inspect
+import importlib.util
 import os
 import uuid
 
@@ -268,9 +268,14 @@ class PluginManager:
                     _log.info("Skipping plugin %s (marked as 'ignore')", mod_name)
                     continue
                 try:
-                    mod_file, mod_filename, mod_desc = imp.find_module(mod_name, [directory])
                     full_mod_name = "pycam.Plugins.%s" % mod_name
-                    mod = imp.load_module(full_mod_name, mod_file, mod_filename, mod_desc)
+                    file_path = os.path.join(directory, filename)
+                    spec = importlib.util.spec_from_file_location(full_mod_name, file_path)
+                    if (spec is None) or (spec.loader is None):
+                        raise ImportError("Unable to load spec for plugin %s (%s)"
+                                          % (mod_name, file_path))
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
                 except ImportError as exc:
                     _log.info("Skipping plugin %s: %s", os.path.join(directory, filename), exc)
                     continue

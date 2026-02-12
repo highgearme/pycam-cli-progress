@@ -36,6 +36,8 @@ import pycam.errors
 from pycam.Flow.parser import parse_yaml
 import pycam.Utils
 import pycam.Utils.log
+from pycam.Utils.cli_progress import CLIProgress
+from pycam.Utils.events import get_event_handler
 import pycam.workspace.data_models
 from pycam.Utils.progress import HeadlessProgressTracker
 
@@ -53,6 +55,11 @@ def get_args():
                                      epilog="PyCAM website: https://github.com/SebKuzminsky/pycam")
     parser.add_argument("--log-level", choices=LOG_LEVELS.keys(), default="warning",
                         help="choose the verbosity of log messages")
+    progress_group = parser.add_mutually_exclusive_group()
+    progress_group.add_argument("--progress", action="store_true",
+                                help="enable textual progress output to stderr")
+    progress_group.add_argument("--json-progress", action="store_true",
+                                help="emit progress updates as JSON to stdout")
     parser.add_argument("sources", metavar="FLOW_SPEC", type=argparse.FileType('r'), nargs="+",
                         help="processing flow description files in yaml format")
     parser.add_argument("--version", action="version", version="%(prog)s {}".format(VERSION))
@@ -62,16 +69,11 @@ def get_args():
 def main_func():
     args = get_args()
     _log.setLevel(LOG_LEVELS[args.log_level])
-    
-    # Initialize headless progress tracking (if enabled via env var)
-    progress = HeadlessProgressTracker(
-        operation_id="pycam_flow",
-        total_steps=len(args.sources) + 1,  # +1 for export phase
-    )
-    progress.update(step=0, message="Initializing PyCAM flow", force=True)
-    
-    # Phase 1: Parse all YAML flow specifications
-    for i, fname in enumerate(args.sources, start=1):
+    if args.progress or args.json_progress:
+        progress_stream = sys.stdout if args.json_progress else sys.stderr
+        get_event_handler().set(
+            "progress", CLIProgress(json_output=args.json_progress, stream=progress_stream))
+    for fname in args.sources:
         try:
             progress.update(step=i, message=f"Parsing {fname.name if hasattr(fname, 'name') else 'flow'}")
             parse_yaml(fname)
