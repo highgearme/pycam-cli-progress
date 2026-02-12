@@ -39,6 +39,7 @@ import pycam.Utils.log
 from pycam.Utils.cli_progress import CLIProgress
 from pycam.Utils.events import get_event_handler
 import pycam.workspace.data_models
+from pycam.Utils.progress import HeadlessProgressTracker
 
 
 _log = pycam.Utils.log.get_logger()
@@ -74,13 +75,27 @@ def main_func():
             "progress", CLIProgress(json_output=args.json_progress, stream=progress_stream))
     for fname in args.sources:
         try:
+            progress.update(step=i, message=f"Parsing {fname.name if hasattr(fname, 'name') else 'flow'}")
             parse_yaml(fname)
         except pycam.errors.PycamBaseException as exc:
+            progress.error(f"Flow parse failed: {exc}")
             print("Flow description parse failure ({}): {}".format(fname, exc), file=sys.stderr)
             sys.exit(1)
+    
     pycam.Utils.set_application_key("pycam-cli")
-    for export in pycam.workspace.data_models.Export.get_collection():
-        export.run_export()
+    
+    # Phase 2: Run all exports
+    exports = list(pycam.workspace.data_models.Export.get_collection())
+    if exports:
+        progress.update(step=len(args.sources) + 1, message=f"Running {len(exports)} export(s)", force=True)
+        for export in exports:
+            try:
+                export.run_export()
+            except Exception as exc:
+                progress.error(f"Export failed: {exc}")
+                raise
+    
+    progress.complete("PyCAM flow completed successfully")
 
 
 if __name__ == "__main__":
