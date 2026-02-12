@@ -69,11 +69,23 @@ def get_args():
 def main_func():
     args = get_args()
     _log.setLevel(LOG_LEVELS[args.log_level])
+    # --- CLI-flag progress (interactive / piped use) ---
     if args.progress or args.json_progress:
         progress_stream = sys.stdout if args.json_progress else sys.stderr
         get_event_handler().set(
             "progress", CLIProgress(json_output=args.json_progress, stream=progress_stream))
-    for fname in args.sources:
+
+    # --- Env-var headless progress (service / worker use) ---
+    # total_steps: N (parse per source) + 1 (export phase)
+    # complete() is called separately and forces 100%.
+    progress = HeadlessProgressTracker(
+        operation_id="pycam_flow",
+        total_steps=len(args.sources) + 1,  # parse + export phase
+    )
+    progress.update(step=0, message="Initializing PyCAM flow", force=True)
+
+    # Phase 1: Parse all YAML flow specifications
+    for i, fname in enumerate(args.sources, start=1):
         try:
             progress.update(step=i, message=f"Parsing {fname.name if hasattr(fname, 'name') else 'flow'}")
             parse_yaml(fname)
@@ -85,14 +97,31 @@ def main_func():
     pycam.Utils.set_application_key("pycam-cli")
     
     # Phase 2: Run all exports
+    # The export phase is the heavy one (toolpath generation) so we set
+    # the progress message to include export count for client visibility.
     exports = list(pycam.workspace.data_models.Export.get_collection())
+    export_step = len(args.sources) + 1
     if exports:
-        progress.update(step=len(args.sources) + 1, message=f"Running {len(exports)} export(s)", force=True)
-        for export in exports:
+        progress.update(
+            step=export_step,
+            message=f"Generating toolpaths ({len(exports)} export(s))...",
+            force=True,
+        )
+        for idx, export in enumerate(exports, start=1):
             try:
+                progress.update(
+                    step=export_step,
+                    message=f"Export {idx}/{len(exports)}: generating toolpath",
+                    force=True,
+                )
                 export.run_export()
+                progress.update(
+                    step=export_step,
+                    message=f"Export {idx}/{len(exports)}: complete",
+                    force=True,
+                )
             except Exception as exc:
-                progress.error(f"Export failed: {exc}")
+                progress.error(f"Export {idx} failed: {exc}")
                 raise
     
     progress.complete("PyCAM flow completed successfully")

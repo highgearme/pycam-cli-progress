@@ -62,18 +62,20 @@ class MeshDensityAnalyzer:
         avg_edge_length = np.mean(edge_lengths)
 
         # Aspect ratio: ratio of longest to shortest edge per triangle
-        aspect_ratios = []
-        for face in mesh.faces:
-            vertices = mesh.vertices[face]
-            edge1 = np.linalg.norm(vertices[1] - vertices[0])
-            edge2 = np.linalg.norm(vertices[2] - vertices[1])
-            edge3 = np.linalg.norm(vertices[0] - vertices[2])
-            edges_tri = sorted([edge1, edge2, edge3])
-            if edges_tri[0] > 0:
-                aspect_ratio = edges_tri[2] / edges_tri[0]
-                aspect_ratios.append(aspect_ratio)
-
-        avg_aspect_ratio = np.mean(aspect_ratios) if aspect_ratios else 1.0
+        # Vectorized computation — avoids per-triangle Python loop
+        triangles = mesh.triangles  # (n, 3, 3) float
+        e1 = np.linalg.norm(triangles[:, 1] - triangles[:, 0], axis=1)
+        e2 = np.linalg.norm(triangles[:, 2] - triangles[:, 1], axis=1)
+        e3 = np.linalg.norm(triangles[:, 0] - triangles[:, 2], axis=1)
+        edge_lengths_per_tri = np.stack([e1, e2, e3], axis=1)
+        edge_min = edge_lengths_per_tri.min(axis=1)
+        edge_max = edge_lengths_per_tri.max(axis=1)
+        valid = edge_min > 0
+        if np.any(valid):
+            aspect_ratios = edge_max[valid] / edge_min[valid]
+            avg_aspect_ratio = float(np.mean(aspect_ratios))
+        else:
+            avg_aspect_ratio = 1.0
 
         # Density metric: triangles per unit volume
         density = triangle_count / volume if volume > 0 else 0
@@ -172,15 +174,12 @@ class MeshDensityReducer:
             log.warning("Target count >= original count. Skipping reduction.")
             return mesh_path
 
-        # Calculate reduction percent for simplify_quadric_decimation
-        # (percent is how much to REMOVE, not keep)
-        percent_remove = 1.0 - (target_count / original_count)
-
         try:
-            # Use trimesh's QEM decimation
-            log.info(f"Applying QEM decimation (removing {percent_remove*100:.1f}%)...")
+            # Use trimesh's QEM decimation with explicit face_count
+            # (avoids ambiguity of 'percent' parameter semantics)
+            log.info(f"Applying QEM decimation (target: {target_count} faces)...")
             mesh_simplified = mesh.simplify_quadric_decimation(
-                percent=percent_remove,
+                face_count=target_count,
                 aggression=int(aggressiveness),
             )
         except Exception as e:
@@ -188,9 +187,10 @@ class MeshDensityReducer:
             raise
 
         new_count = len(mesh_simplified.faces)
+        reduction_pct = (new_count / original_count * 100) if original_count > 0 else 0
         log.info(
             f"Simplified mesh: {new_count} triangles "
-            f"({new_count / original_count * 100:.1f}% of original)"
+            f"({reduction_pct:.1f}% of original)"
         )
 
         # Default output path
@@ -255,9 +255,10 @@ class MeshDensityReducer:
             raise
 
         new_count = len(mesh_simplified.faces)
+        reduction_pct = (new_count / original_count * 100) if original_count > 0 else 0
         log.info(
             f"Voxelized mesh: {new_count} triangles "
-            f"({new_count / original_count * 100:.1f}% of original)"
+            f"({reduction_pct:.1f}% of original)"
         )
 
         # Default output path
@@ -304,18 +305,16 @@ class MeshDensityReducer:
             >>> if metrics['was_reduced']:
             ...     print(f"Reduction: {metrics['reduction_percentage']:.1f}%")
         """
-        analyzer = MeshDensityAnalyzer()
-        reducer = MeshDensityReducer()
-
+        # All methods are @staticmethod — call on the class directly
         # Analyze density
-        metrics = analyzer.detect_mesh_density(mesh_path)
+        metrics = MeshDensityAnalyzer.detect_mesh_density(mesh_path)
         density = metrics["density_triangles_per_mm3"]
 
         reduction_metrics = {
             "was_reduced": False,
             "original_count": metrics["triangle_count"],
             "density": density,
-            "assessment": analyzer.get_density_assessment(metrics),
+            "assessment": MeshDensityAnalyzer.get_density_assessment(metrics),
         }
 
         # Skip reduction for low-density meshes
@@ -338,14 +337,14 @@ class MeshDensityReducer:
         log.info(f"Using strategy: {strategy}")
 
         try:
-            reduced_path = reducer.reduce_mesh_density_qem(
+            reduced_path = MeshDensityReducer.reduce_mesh_density_qem(
                 mesh_path,
                 target_ratio=target_ratio,
                 output_path=output_path,
             )
 
             # Analyze reduced mesh
-            reduced_metrics = analyzer.detect_mesh_density(reduced_path)
+            reduced_metrics = MeshDensityAnalyzer.detect_mesh_density(reduced_path)
             reduction_metrics["was_reduced"] = True
             reduction_metrics["reduced_count"] = reduced_metrics["triangle_count"]
             reduction_metrics["reduction_percentage"] = (

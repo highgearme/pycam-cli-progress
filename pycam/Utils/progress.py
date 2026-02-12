@@ -1,8 +1,9 @@
 import os
 import sys
 import json
+import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import pycam.Utils.log
@@ -55,6 +56,25 @@ class HeadlessProgressTracker:
         
         # Update interval in seconds
         self.update_interval = float(os.environ.get("PYCAM_PROGRESS_INTERVAL", "1.0"))
+
+        # Heartbeat interval — emit a status line even when no explicit
+        # update() is called, so clients know the process is still alive.
+        # 0 disables heartbeat.  Default 10 s keeps clients informed on
+        # long toolpath runs without flooding stderr.
+        self._heartbeat_interval = float(
+            os.environ.get("PYCAM_PROGRESS_HEARTBEAT", "10.0")
+        )
+        self._heartbeat_thread = None
+        self._heartbeat_stop = None
+
+        if self.enabled and self._heartbeat_interval > 0:
+            self._heartbeat_stop = threading.Event()
+            self._heartbeat_thread = threading.Thread(
+                target=self._heartbeat_loop,
+                daemon=True,
+                name="pycam-heartbeat",
+            )
+            self._heartbeat_thread.start()
         
         if self.enabled:
             log.debug(f"Headless progress tracking: {operation_id} "
@@ -98,6 +118,9 @@ class HeadlessProgressTracker:
         """Mark operation as complete."""
         if not self.enabled:
             return
+
+        # Stop heartbeat thread first
+        self._stop_heartbeat()
         
         if self.total_steps and self.current_step < self.total_steps:
             self.current_step = self.total_steps
@@ -109,9 +132,36 @@ class HeadlessProgressTracker:
         """Report an error."""
         if not self.enabled:
             return
+
+        # Stop heartbeat thread first
+        self._stop_heartbeat()
         
         self.current_message = message
         self._output_progress(status="error", final=True)
+
+    def _stop_heartbeat(self) -> None:
+        """Signal heartbeat thread to stop and wait for it."""
+        if self._heartbeat_stop is not None:
+            self._heartbeat_stop.set()
+        if self._heartbeat_thread is not None and self._heartbeat_thread.is_alive():
+            self._heartbeat_thread.join(timeout=2)
+
+    def _heartbeat_loop(self) -> None:
+        """Periodically emit a progress line so clients know we're alive.
+
+        Fires every ``_heartbeat_interval`` seconds.
+        Only emits if no regular update was sent recently."""
+        while not self._heartbeat_stop.is_set():
+            self._heartbeat_stop.wait(timeout=self._heartbeat_interval)
+            if self._heartbeat_stop.is_set():
+                break
+            # Only emit if no recent update
+            now = time.time()
+            if (now - self.last_update_time) >= (self._heartbeat_interval * 0.8):
+                elapsed = now - self.start_time
+                # Re-emit current state as a heartbeat
+                self.last_update_time = now
+                self._output_progress(status="running")
 
     def _output_progress(self, status: str = "running", final: bool = False) -> None:
         """Output progress in configured format."""
@@ -136,7 +186,7 @@ class HeadlessProgressTracker:
     def _format_json(self, status: str, elapsed: float, final: bool) -> str:
         """JSON output with all metrics."""
         data = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "operation": self.operation_id,
             "status": status,
             "step": self.current_step,

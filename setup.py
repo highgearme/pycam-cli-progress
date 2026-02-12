@@ -36,7 +36,10 @@ setup(
     author="Lars Kruse",
     author_email="devel@sumpfralle.de",
     provides=["pycam"],
-    requires=["PyOpenGL", "PyYAML"],
+    install_requires=["PyOpenGL", "PyYAML"],
+    extras_require={
+        "mesh": ["trimesh", "numpy"],
+    },
     url="http://pycam.sourceforge.net/",
     download_url="http://sourceforge.net/projects/pycam/files",
     keywords=["3-axis", "cnc", "cam", "toolpath", "machining", "g-code"],
