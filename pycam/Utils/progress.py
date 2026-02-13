@@ -38,6 +38,8 @@ class HeadlessProgressTracker:
         self.operation_id = operation_id
         self.total_steps = total_steps
         self.current_step = 0
+        self.sub_progress = None  # None = inactive; 0.0-1.0 = within-step progress
+        self._last_emitted_sub = None  # Track last emitted sub_progress for change detection
         self.start_time = time.time()
         self.last_update_time = self.start_time
         self.current_message = ""
@@ -83,7 +85,8 @@ class HeadlessProgressTracker:
     def update(self,
                step: Optional[int] = None,
                message: str = "",
-               force: bool = False) -> None:
+               force: bool = False,
+               sub_progress: Optional[float] = None) -> None:
         """
         Update progress.
 
@@ -91,6 +94,9 @@ class HeadlessProgressTracker:
             step: Current step number (if None, auto-increment)
             message: Status message to display
             force: Force output regardless of time interval
+            sub_progress: Progress within current step (0.0-1.0).
+                          When set, progress_percent reflects both
+                          completed steps and within-step progress.
         """
         if not self.enabled:
             return
@@ -105,14 +111,26 @@ class HeadlessProgressTracker:
             self.current_step = step
         else:
             self.current_step += 1
+
+        if sub_progress is not None:
+            self.sub_progress = max(0.0, min(1.0, sub_progress))
+        elif step is not None:
+            # New step without explicit sub_progress — reset to inactive
+            self.sub_progress = None
         
         self.current_message = message
         self.last_update_time = now
         
-        # Output if message changed or forced
-        if force or message != self.last_message:
+        # Output if message changed, forced, or sub_progress moved >=1%
+        sub_changed = (
+            self.sub_progress is not None
+            and (self._last_emitted_sub is None
+                 or abs(self.sub_progress - self._last_emitted_sub) >= 0.01)
+        )
+        if force or message != self.last_message or sub_changed:
             self._output_progress()
             self.last_message = message
+            self._last_emitted_sub = self.sub_progress
 
     def complete(self, message: str = "Complete") -> None:
         """Mark operation as complete."""
@@ -125,6 +143,7 @@ class HeadlessProgressTracker:
         if self.total_steps and self.current_step < self.total_steps:
             self.current_step = self.total_steps
         
+        self.sub_progress = None  # Reset — full step is complete
         self.current_message = message
         self._output_progress(status="complete", final=True)
 
@@ -197,7 +216,12 @@ class HeadlessProgressTracker:
         }
         
         if self.total_steps and self.total_steps > 0:
-            data["progress_percent"] = round(100.0 * self.current_step / self.total_steps, 1)
+            if self.sub_progress is not None and self.current_step > 0:
+                # Account for completed steps + fractional progress in current step
+                effective = (self.current_step - 1 + self.sub_progress) / self.total_steps
+                data["progress_percent"] = round(100.0 * min(1.0, effective), 1)
+            else:
+                data["progress_percent"] = round(100.0 * self.current_step / self.total_steps, 1)
         
         return json.dumps(data, separators=(',', ':'))
 
@@ -215,7 +239,11 @@ class HeadlessProgressTracker:
         ]
         
         if self.total_steps and self.total_steps > 0:
-            percent = round(100.0 * self.current_step / self.total_steps, 1)
+            if self.sub_progress is not None and self.current_step > 0:
+                effective = (self.current_step - 1 + self.sub_progress) / self.total_steps
+                percent = round(100.0 * min(1.0, effective), 1)
+            else:
+                percent = round(100.0 * self.current_step / self.total_steps, 1)
             parts.append(f"pct={percent}%")
         
         return " | ".join(parts)
