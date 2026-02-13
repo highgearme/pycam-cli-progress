@@ -218,6 +218,7 @@ def main_func():
         progress.update(
             step=export_step,
             message=f"Generating toolpaths ({len(exports)} export(s))...",
+            sub_progress=0.0,
             force=True,
         )
         for idx, export in enumerate(exports, start=1):
@@ -246,6 +247,7 @@ def main_func():
                 progress.update(
                     step=export_step,
                     message=f"Export {idx}/{len(exports)}: complete",
+                    sub_progress=(idx / len(exports)),
                     force=True,
                 )
             except Exception as exc:
