@@ -267,7 +267,8 @@ def _filter_linear_points(positions):
     yield p2
 
 
-def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5):
+def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5,
+                           num_positions=0, line_index=0, num_lines=1):
     """ calculate the tool positions based on a given set of x/y locations
 
     The given input locations should be suitable for the tool size in order to find all relevant
@@ -275,15 +276,45 @@ def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5):
     height between every set of two points is not in line with its neighbours.
     The result is a list of points to be traveled by the tool.
     """
+    import json, sys, time as _time
     # for now there is only a triangle-mesh based calculation
     get_max_height = lambda x, y: get_max_height_triangles(model, cutter, x, y, minz, maxz)
-    # calculate suitable tool locations (without collisions) for each given position
-    points_with_height = (get_max_height(x, y) for x, y in positions)
-    # Spread more positions between the existing ones.
-    dynamically_filled_points = _dynamic_point_fill_generator(points_with_height, get_max_height,
-                                                              max_depth)
-    # Remove all points that are in line between their neighbours.
-    return list(_filter_linear_points(dynamically_filled_points))
+
+    def _emit(pct, msg):
+        print(json.dumps({
+            "operation": "dropcutter",
+            "status": "running",
+            "progress_percent": int(pct),
+            "message": msg,
+        }), file=sys.stderr, flush=True)
+
+    # Phase 1: Computing Heights (5-48%)
+    height_points = []
+    _last_emit = 0
+    for i, (x, y) in enumerate(positions):
+        height_points.append(get_max_height(x, y))
+        now = _time.monotonic()
+        if num_positions > 0 and (now - _last_emit) >= 2.0:
+            _last_emit = now
+            pct = 5.0 + 43.0 * (i + 1) / num_positions
+            _emit(pct, "Computing heights (%d / %d positions)" % (i + 1, num_positions))
+
+    # Phase 2: Refining Detail (48-82%)
+    filled = []
+    _last_emit = 0
+    est_filled = max(1, num_positions * 2) if num_positions > 0 else 1
+    for pt in _dynamic_point_fill_generator(iter(height_points), get_max_height, max_depth):
+        filled.append(pt)
+        now = _time.monotonic()
+        if (now - _last_emit) >= 2.0:
+            _last_emit = now
+            pct = min(81.9, 48.0 + 34.0 * len(filled) / est_filled)
+            _emit(pct, "Refining detail (%d points)" % len(filled))
+
+    # Phase 3: Optimizing Path (82% — runs instantly)
+    result = list(_filter_linear_points(iter(filled)))
+    _emit(82.0, "Optimizing path (%d points, done)" % len(result))
+    return result
 
 
 class UpdateToolView:
@@ -298,24 +329,36 @@ class UpdateToolView:
         self.current_tool_position = None
 
     def update(self, text=None, percent=None, tool_position=None, toolpath=None):
-        if toolpath is not None:
-            self.core.set("toolpath_in_progress", toolpath)
-        # always store the most recently reported tool_position for the next visualization
-        if tool_position is not None:
-            self.current_tool_position = tool_position
-        redraw_wanted = False
-        current_time = time.time()
-        if (current_time - self.last_update_time) > 1.0 / self.max_fps:
-            if self.current_tool_position != self.last_tool_position:
-                tool = self.core.get("current_tool")
-                if tool:
-                    tool.moveto(self.current_tool_position)
-                self.last_tool_position = self.current_tool_position
-                redraw_wanted = True
-            if self.core.get("show_toolpath_progress"):
-                redraw_wanted = True
-            self.last_update_time = current_time
-            if redraw_wanted:
-                self.core.emit_event("visual-item-updated")
-        # break the loop if someone clicked the "cancel" button
-        return self.callback(text=text, percent=percent)
+        # Always forward to callback first (critical for headless progress tracking)
+        # GUI visualization is secondary and may fail in headless mode
+        callback_result = None
+        if self.callback:
+            callback_result = self.callback(text=text, percent=percent)
+        
+        # GUI visualization (may fail in headless mode, non-critical)
+        try:
+            if toolpath is not None:
+                self.core.set("toolpath_in_progress", toolpath)
+            # always store the most recently reported tool_position for the next visualization
+            if tool_position is not None:
+                self.current_tool_position = tool_position
+            redraw_wanted = False
+            current_time = time.time()
+            if (current_time - self.last_update_time) > 1.0 / self.max_fps:
+                if self.current_tool_position != self.last_tool_position:
+                    tool = self.core.get("current_tool")
+                    if tool:
+                        tool.moveto(self.current_tool_position)
+                    self.last_tool_position = self.current_tool_position
+                    redraw_wanted = True
+                if self.core.get("show_toolpath_progress"):
+                    redraw_wanted = True
+                self.last_update_time = current_time
+                if redraw_wanted:
+                    self.core.emit_event("visual-item-updated")
+        except (AttributeError, KeyError, TypeError):
+            # Headless mode: self.core may be None or missing methods
+            pass
+        
+        # Return callback result (may indicate cancel requested)
+        return callback_result

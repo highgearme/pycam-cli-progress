@@ -18,6 +18,9 @@ You should have received a copy of the GNU General Public License
 along with PyCAM.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+import json
+import os
+import sys
 import time
 
 import pycam.Geometry.Model
@@ -37,14 +40,24 @@ def _process_one_grid_line(extra_args):
     Otherwise the dynamic over-sampling (in get_max_height_dynamic) is
     pointless.
     """
-    positions, minz, maxz, model, cutter = extra_args
-    return get_max_height_dynamic(model, cutter, positions, minz, maxz)
+    positions, minz, maxz, model, cutter, max_depth, num_positions, line_index, num_lines = extra_args
+    return get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=max_depth,
+                                  num_positions=num_positions, line_index=line_index,
+                                  num_lines=num_lines)
 
 
 class DropCutter:
 
     def generate_toolpath(self, cutter, models, motion_grid, minz=None, maxz=None,
                           draw_callback=None):
+        # Dynamic fill max_depth: default=5 (GUI), set to 2 for headless CNC via env var
+        # to prevent point explosion with dense grids (step <1mm).  max_depth=2 allows
+        # up to 4x intermediate points; max_depth=5 allows up to 32x.
+        try:
+            dynamic_fill_max_depth = int(os.environ.get("PYCAM_DYNAMIC_FILL_MAX_DEPTH", "2"))
+        except (ValueError, TypeError):
+            dynamic_fill_max_depth = 2
+        
         path = []
         quit_requested = False
         model = pycam.Geometry.Model.get_combined_model(models)
@@ -61,51 +74,65 @@ class DropCutter:
         progress_counter = ProgressCounter(len(lines), draw_callback)
         current_line = 0
 
-        # Diagnostic: report grid size so worker logs can explain slow progress.
-        # Use print(stderr) not log.warning() — PyCAM's logging system may not
-        # have a handler configured for stderr in headless mode, but the worker's
-        # progress monitor reads stderr directly.
-        import sys as _sys
-        if lines:
-            avg_positions = sum(len(line) for line in lines) / len(lines)
-            print("DropCutter: %d grid lines, ~%d positions/line (before dynamic fill)"
-                  % (num_of_lines, int(avg_positions)), file=_sys.stderr, flush=True)
-        else:
-            print("DropCutter: 0 grid lines — nothing to process", file=_sys.stderr, flush=True)
-
         args = []
-        for one_grid_line in lines:
+        for idx, one_grid_line in enumerate(lines):
             # simplify the data (useful for remote processing)
             xy_coords = [(pos[0], pos[1]) for pos in one_grid_line]
-            args.append((xy_coords, minz, maxz, model, cutter))
-        _line_start_time = time.monotonic()
+            args.append((xy_coords, minz, maxz, model, cutter, dynamic_fill_max_depth,
+                         len(xy_coords), idx, num_of_lines))
+        _start_time = time.monotonic()
+        print("DropCutter: %d grid lines, max_depth=%d"
+              % (num_of_lines, dynamic_fill_max_depth), file=sys.stderr, flush=True)
         for points in run_in_parallel(_process_one_grid_line, args,
-                                      callback=progress_counter.update):
+                                      callback=progress_counter.increment):
             if draw_callback and draw_callback(
                     text="DropCutter: processing line %d/%d" % (current_line + 1, num_of_lines)):
                 # cancel requested
                 quit_requested = True
                 break
-            for point in points:
+            # Build toolpath from computed points (83-98%)
+            _num_pts = len(points)
+            _bt_last_emit = 0
+            for _pi, point in enumerate(points):
                 if point is None:
                     # exceeded maxz - the cutter has to skip this point
                     path.append(MoveSafety())
                 else:
                     path.append(MoveStraight(point))
+                _bt_now = time.monotonic()
+                if _num_pts > 0 and (_bt_now - _bt_last_emit) >= 2.0:
+                    _bt_last_emit = _bt_now
+                    _bt_pct = 83.0 + 15.0 * (_pi + 1) / _num_pts
+                    print(json.dumps({
+                        "operation": "dropcutter",
+                        "status": "running",
+                        "progress_percent": int(_bt_pct),
+                        "message": "Building toolpath (%d / %d points)" % (_pi + 1, _num_pts),
+                        "elapsed_seconds": round(_bt_now - _start_time, 1),
+                        "final": False,
+                    }), file=sys.stderr, flush=True)
                 # The progress counter may return True, if cancel was requested.
                 if draw_callback and draw_callback(tool_position=point, toolpath=path):
                     quit_requested = True
                     break
             # add a move to safety height after each line of moves
             path.append(MoveSafety())
-            progress_counter.increment()
-            # update progress
-            _line_elapsed = time.monotonic() - _line_start_time
-            print("DropCutter: line %d/%d done in %.1fs"
-                  % (current_line + 1, num_of_lines, _line_elapsed),
-                  file=_sys.stderr, flush=True)
-            _line_start_time = time.monotonic()
             current_line += 1
+
+            # Emit per-line progress (only useful when there are multiple lines)
+            if num_of_lines > 1:
+                _pct = 50.0 + 50.0 * current_line / num_of_lines
+                print(json.dumps({
+                    "operation": "dropcutter",
+                    "status": "running",
+                    "step": 2,
+                    "total_steps": 2,
+                    "progress_percent": int(_pct),
+                    "message": "Processing line %d/%d" % (current_line, num_of_lines),
+                    "elapsed_seconds": round(time.monotonic() - _start_time, 1),
+                    "final": False,
+                }), file=sys.stderr, flush=True)
+            
             if quit_requested:
                 break
         return path
