@@ -101,6 +101,10 @@ class HeadlessProgressBridge:
 
         # Use the fine-grained percent from ProgressCounter (triangle/grid-line level)
         if percent is not None:
+            # DEBUG: confirm bridge receives percent updates from DropCutter
+            import sys as _sys
+            print("[bridge] percent=%.2f text=%s" % (percent, text),
+                  file=_sys.stderr, flush=True)
             # Scale this export's percent into the overall multi-export range
             export_frac = (self._current_export_idx + percent / 100.0) / self._total_exports
             # Build message with layer context if available
