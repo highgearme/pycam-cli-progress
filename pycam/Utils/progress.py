@@ -102,23 +102,31 @@ class HeadlessProgressTracker:
             return
         
         now = time.time()
-        should_update = force or (now - self.last_update_time) >= self.update_interval
-        
-        if not should_update:
-            return
-        
+        should_output = force or (now - self.last_update_time) >= self.update_interval
+
+        # Always store state so heartbeats reflect the latest values,
+        # even when the output throttle suppresses this update.
         if step is not None:
             self.current_step = step
-        else:
-            self.current_step += 1
 
         if sub_progress is not None:
             self.sub_progress = max(0.0, min(1.0, sub_progress))
         elif step is not None:
             # New step without explicit sub_progress — reset to inactive
             self.sub_progress = None
-        
-        self.current_message = message
+
+        if message:
+            self.current_message = message
+
+        if not should_output:
+            return
+
+        # Auto-increment step only when actually outputting and no
+        # explicit step was given (avoid double-increment on throttled
+        # calls that already stored the step above).
+        if step is None:
+            self.current_step += 1
+
         self.last_update_time = now
         
         # Output if message changed, forced, or sub_progress moved >=1%
@@ -169,7 +177,14 @@ class HeadlessProgressTracker:
         """Periodically emit a progress line so clients know we're alive.
 
         Fires every ``_heartbeat_interval`` seconds.
-        Only emits if no regular update was sent recently."""
+        Only emits if no regular update was sent recently.
+
+        IMPORTANT: The heartbeat must NOT set ``last_update_time``.
+        That timestamp is used by ``update()`` for its 1-second throttle.
+        If the heartbeat resets it, real progress updates arriving within
+        1 second of a heartbeat pulse are silently throttled, causing
+        sub_progress to never advance (progress stuck at 5 %).
+        """
         while not self._heartbeat_stop.is_set():
             self._heartbeat_stop.wait(timeout=self._heartbeat_interval)
             if self._heartbeat_stop.is_set():
@@ -177,9 +192,8 @@ class HeadlessProgressTracker:
             # Only emit if no recent update
             now = time.time()
             if (now - self.last_update_time) >= (self._heartbeat_interval * 0.8):
-                elapsed = now - self.start_time
-                # Re-emit current state as a heartbeat
-                self.last_update_time = now
+                # Re-emit current state as a heartbeat.
+                # Do NOT touch self.last_update_time — it belongs to update().
                 self._output_progress(status="running")
 
     def _output_progress(self, status: str = "running", final: bool = False) -> None:
