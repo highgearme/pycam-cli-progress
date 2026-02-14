@@ -12,8 +12,10 @@ from pycam.Utils.events import get_event_handler, get_mainloop
 log = pycam.Utils.log.get_logger()
 
 
-# ── Diagnostic trace to /tmp (bypasses stderr relay chain) ──
-_TRACE_PATH = "/tmp/pycam-progress-trace.log"
+# ── Diagnostic trace (bypasses stderr relay chain) ──
+# Use /srv path instead of /tmp because systemd PrivateTmp=true
+# isolates /tmp from the user's shell.
+_TRACE_PATH = "/srv/lct-uploads/stl/pycam-progress-trace.log"
 
 def _trace(tag, msg):
     """Append a timestamped line to the trace file.  Thread-safe via append mode."""
