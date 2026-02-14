@@ -129,11 +129,13 @@ class HeadlessProgressTracker:
 
         self.last_update_time = now
         
-        # Output if message changed, forced, or sub_progress moved >=1%
+        # Output if message changed, forced, or sub_progress moved >=0.1%.
+        # Previous threshold of 1% (0.01) suppressed updates for models with
+        # many grid lines (e.g. 103 lines → 0.97% each, just under threshold).
         sub_changed = (
             self.sub_progress is not None
             and (self._last_emitted_sub is None
-                 or abs(self.sub_progress - self._last_emitted_sub) >= 0.01)
+                 or abs(self.sub_progress - self._last_emitted_sub) >= 0.001)
         )
         if force or message != self.last_message or sub_changed:
             self._output_progress()

@@ -61,13 +61,17 @@ class DropCutter:
         progress_counter = ProgressCounter(len(lines), draw_callback)
         current_line = 0
 
-        # Diagnostic: report grid size so worker logs can explain slow progress
+        # Diagnostic: report grid size so worker logs can explain slow progress.
+        # Use print(stderr) not log.warning() — PyCAM's logging system may not
+        # have a handler configured for stderr in headless mode, but the worker's
+        # progress monitor reads stderr directly.
+        import sys as _sys
         if lines:
             avg_positions = sum(len(line) for line in lines) / len(lines)
-            log.warning("DropCutter: %d grid lines, ~%d positions/line (dynamic fill may add more)",
-                        num_of_lines, int(avg_positions))
+            print("DropCutter: %d grid lines, ~%d positions/line (before dynamic fill)"
+                  % (num_of_lines, int(avg_positions)), file=_sys.stderr, flush=True)
         else:
-            log.warning("DropCutter: 0 grid lines — nothing to process")
+            print("DropCutter: 0 grid lines — nothing to process", file=_sys.stderr, flush=True)
 
         args = []
         for one_grid_line in lines:
@@ -97,8 +101,9 @@ class DropCutter:
             progress_counter.increment()
             # update progress
             _line_elapsed = time.monotonic() - _line_start_time
-            log.warning("DropCutter: line %d/%d done in %.1fs (%d points)",
-                        current_line + 1, num_of_lines, _line_elapsed, len(points))
+            print("DropCutter: line %d/%d done in %.1fs"
+                  % (current_line + 1, num_of_lines, _line_elapsed),
+                  file=_sys.stderr, flush=True)
             _line_start_time = time.monotonic()
             current_line += 1
             if quit_requested:
