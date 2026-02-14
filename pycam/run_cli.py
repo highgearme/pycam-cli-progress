@@ -40,7 +40,7 @@ import pycam.Utils.log
 from pycam.Utils.cli_progress import CLIProgress
 from pycam.Utils.events import get_event_handler
 import pycam.workspace.data_models
-from pycam.Utils.progress import HeadlessProgressTracker
+from pycam.Utils.progress import HeadlessProgressTracker, _trace
 
 
 _log = pycam.Utils.log.get_logger()
@@ -91,6 +91,9 @@ class HeadlessProgressBridge:
         ProgressCounter is the single source of truth for numeric progress;
         the layer text is only used in the human-readable status message.
         """
+        # Trace EVERY call (not just percent) to /tmp file
+        _trace("Bridge", "update text=%s percent=%s" % (text, percent))
+
         # Cache layer/line text when available
         if text:
             m = self._LAYER_RE.search(text)
@@ -101,10 +104,6 @@ class HeadlessProgressBridge:
 
         # Use the fine-grained percent from ProgressCounter (triangle/grid-line level)
         if percent is not None:
-            # DEBUG: confirm bridge receives percent updates from DropCutter
-            import sys as _sys
-            print("[bridge] percent=%.2f text=%s" % (percent, text),
-                  file=_sys.stderr, flush=True)
             # Scale this export's percent into the overall multi-export range
             export_frac = (self._current_export_idx + percent / 100.0) / self._total_exports
             # Build message with layer context if available
@@ -113,6 +112,7 @@ class HeadlessProgressBridge:
                 msg = "%s: %s" % (export_label, self._last_layer_text)
             else:
                 msg = "%s: processing" % export_label
+            _trace("Bridge", "calling tracker: sub_progress=%.6f msg=%s" % (export_frac, msg))
             self._tracker.update(
                 step=self._export_step,
                 message=msg,

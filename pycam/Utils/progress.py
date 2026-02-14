@@ -12,6 +12,18 @@ from pycam.Utils.events import get_event_handler, get_mainloop
 log = pycam.Utils.log.get_logger()
 
 
+# ── Diagnostic trace to /tmp (bypasses stderr relay chain) ──
+_TRACE_PATH = "/tmp/pycam-progress-trace.log"
+
+def _trace(tag, msg):
+    """Append a timestamped line to the trace file.  Thread-safe via append mode."""
+    try:
+        with open(_TRACE_PATH, "a") as f:
+            f.write("[%.3f] [%s] %s\n" % (time.time(), tag, msg))
+    except Exception:
+        pass
+
+
 class HeadlessProgressTracker:
     """
     Progress monitoring for headless PyCAM operations.
@@ -138,9 +150,18 @@ class HeadlessProgressTracker:
                  or abs(self.sub_progress - self._last_emitted_sub) >= 0.001)
         )
         if force or message != self.last_message or sub_changed:
+            _trace("Tracker", "OUTPUT sub=%.4f last_emitted=%.4f msg=%s force=%s sub_changed=%s"
+                   % (self.sub_progress if self.sub_progress is not None else -1,
+                      self._last_emitted_sub if self._last_emitted_sub is not None else -1,
+                      message, force, sub_changed))
             self._output_progress()
             self.last_message = message
             self._last_emitted_sub = self.sub_progress
+        else:
+            _trace("Tracker", "SUPPRESSED sub=%.4f last_emitted=%.4f msg_same=%s sub_changed=%s"
+                   % (self.sub_progress if self.sub_progress is not None else -1,
+                      self._last_emitted_sub if self._last_emitted_sub is not None else -1,
+                      message == self.last_message, sub_changed))
 
     def complete(self, message: str = "Complete") -> None:
         """Mark operation as complete."""
@@ -284,6 +305,11 @@ class ProgressContext:
     def __init__(self, title):
         self._title = title
         self._progress = get_event_handler().get("progress")
+        _trace("ProgressCtx", "init title=%s _progress=%s (type=%s, id=%d)"
+               % (title,
+                  self._progress,
+                  type(self._progress).__name__ if self._progress else "None",
+                  id(self._progress) if self._progress else 0))
 
     def __enter__(self):
         if self._progress:
@@ -301,6 +327,9 @@ class ProgressContext:
     def update(self, *args, **kwargs):
         if not self._progress:
             return False
+        pct = kwargs.get("percent")
+        if pct is not None:
+            _trace("ProgressCtx", "update percent=%.4f title=%s" % (pct, self._title))
         mainloop = get_mainloop()
         if mainloop is not None:
             mainloop.update()
