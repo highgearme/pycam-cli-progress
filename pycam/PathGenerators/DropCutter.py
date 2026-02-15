@@ -40,8 +40,10 @@ def _process_one_grid_line(extra_args):
     Otherwise the dynamic over-sampling (in get_max_height_dynamic) is
     pointless.
     """
-    positions, minz, maxz, model, cutter, max_depth = extra_args
-    return get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=max_depth)
+    positions, minz, maxz, model, cutter, max_depth, num_positions, line_index, num_lines = extra_args
+    return get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=max_depth,
+                                  num_positions=num_positions, line_index=line_index,
+                                  num_lines=num_lines)
 
 
 class DropCutter:
@@ -73,10 +75,11 @@ class DropCutter:
         current_line = 0
 
         args = []
-        for one_grid_line in lines:
+        for idx, one_grid_line in enumerate(lines):
             # simplify the data (useful for remote processing)
             xy_coords = [(pos[0], pos[1]) for pos in one_grid_line]
-            args.append((xy_coords, minz, maxz, model, cutter, dynamic_fill_max_depth))
+            args.append((xy_coords, minz, maxz, model, cutter, dynamic_fill_max_depth,
+                         len(xy_coords), idx, num_of_lines))
         _start_time = time.monotonic()
         print("DropCutter: %d grid lines, max_depth=%d"
               % (num_of_lines, dynamic_fill_max_depth), file=sys.stderr, flush=True)

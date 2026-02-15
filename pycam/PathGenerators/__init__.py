@@ -267,7 +267,8 @@ def _filter_linear_points(positions):
     yield p2
 
 
-def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5):
+def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5,
+                           num_positions=0, line_index=0, num_lines=1):
     """ calculate the tool positions based on a given set of x/y locations
 
     The given input locations should be suitable for the tool size in order to find all relevant
@@ -275,12 +276,37 @@ def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5):
     height between every set of two points is not in line with its neighbours.
     The result is a list of points to be traveled by the tool.
     """
+    import json, sys, time as _time
     # for now there is only a triangle-mesh based calculation
     get_max_height = lambda x, y: get_max_height_triangles(model, cutter, x, y, minz, maxz)
     # calculate suitable tool locations (without collisions) for each given position
-    points_with_height = (get_max_height(x, y) for x, y in positions)
+    # Consume positions one-by-one to track progress
+    height_points = []
+    _last_pct_time = _time.monotonic()
+    for i, (x, y) in enumerate(positions):
+        height_points.append(get_max_height(x, y))
+        # Emit progress every ~2 seconds (avoid flooding stderr)
+        now = _time.monotonic()
+        if num_positions > 0 and (now - _last_pct_time) >= 2.0:
+            _last_pct_time = now
+            pos_frac = (i + 1) / num_positions
+            # Map position progress within this line to overall progress.
+            # Overall line progress = (line_index + pos_frac) / num_lines
+            line_frac = (line_index + pos_frac) / num_lines
+            # Map to 50-100% range (worker remaps 50-100 → 5-100% for UI)
+            pct = 50.0 + 50.0 * line_frac
+            print(json.dumps({
+                "operation": "dropcutter",
+                "status": "running",
+                "step": 2,
+                "total_steps": 2,
+                "progress_percent": round(pct, 1),
+                "message": "Position %d/%d" % (i + 1, num_positions),
+                "elapsed_seconds": 0,
+                "final": False,
+            }), file=sys.stderr, flush=True)
     # Spread more positions between the existing ones.
-    dynamically_filled_points = _dynamic_point_fill_generator(points_with_height, get_max_height,
+    dynamically_filled_points = _dynamic_point_fill_generator(iter(height_points), get_max_height,
                                                               max_depth)
     # Remove all points that are in line between their neighbours.
     return list(_filter_linear_points(dynamically_filled_points))
