@@ -311,10 +311,8 @@ def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5,
             pct = min(81.9, 50.0 + 32.0 * len(filled) / est_filled)
             _emit(pct, "Refining detail (%d points)" % len(filled))
 
-    # Phase 3: Optimizing Path (82-83% — runs instantly, label only)
-    _emit(82.0, "Optimizing path (%d points)" % len(filled))
+    # Phase 3: Optimizing Path (82-83% — runs instantly)
     result = list(_filter_linear_points(iter(filled)))
-
     _emit(83.0, "Optimizing path (%d points, done)" % len(result))
     return result
 
