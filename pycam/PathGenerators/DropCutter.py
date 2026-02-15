@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License
 along with PyCAM.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+import os
 import time
 
 import pycam.Geometry.Model
@@ -37,14 +38,22 @@ def _process_one_grid_line(extra_args):
     Otherwise the dynamic over-sampling (in get_max_height_dynamic) is
     pointless.
     """
-    positions, minz, maxz, model, cutter = extra_args
-    return get_max_height_dynamic(model, cutter, positions, minz, maxz)
+    positions, minz, maxz, model, cutter, max_depth = extra_args
+    return get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=max_depth)
 
 
 class DropCutter:
 
     def generate_toolpath(self, cutter, models, motion_grid, minz=None, maxz=None,
                           draw_callback=None):
+        # Dynamic fill max_depth: default=5 (GUI), set to 2 for headless CNC via env var
+        # to prevent point explosion with dense grids (step <1mm).  max_depth=2 allows
+        # up to 4x intermediate points; max_depth=5 allows up to 32x.
+        try:
+            dynamic_fill_max_depth = int(os.environ.get("PYCAM_DYNAMIC_FILL_MAX_DEPTH", "2"))
+        except (ValueError, TypeError):
+            dynamic_fill_max_depth = 2
+        
         path = []
         quit_requested = False
         model = pycam.Geometry.Model.get_combined_model(models)
@@ -68,8 +77,8 @@ class DropCutter:
         import sys as _sys
         if lines:
             avg_positions = sum(len(line) for line in lines) / len(lines)
-            print("DropCutter: %d grid lines, ~%d positions/line (before dynamic fill)"
-                  % (num_of_lines, int(avg_positions)), file=_sys.stderr, flush=True)
+            print("DropCutter: %d grid lines, ~%d positions/line, max_depth=%d (before dynamic fill)"
+                  % (num_of_lines, int(avg_positions), dynamic_fill_max_depth), file=_sys.stderr, flush=True)
         else:
             print("DropCutter: 0 grid lines — nothing to process", file=_sys.stderr, flush=True)
 
@@ -77,7 +86,7 @@ class DropCutter:
         for one_grid_line in lines:
             # simplify the data (useful for remote processing)
             xy_coords = [(pos[0], pos[1]) for pos in one_grid_line]
-            args.append((xy_coords, minz, maxz, model, cutter))
+            args.append((xy_coords, minz, maxz, model, cutter, dynamic_fill_max_depth))
         _line_start_time = time.monotonic()
         for points in run_in_parallel(_process_one_grid_line, args,
                                       callback=progress_counter.update):
