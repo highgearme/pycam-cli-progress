@@ -281,7 +281,7 @@ def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5,
     get_max_height = lambda x, y: get_max_height_triangles(model, cutter, x, y, minz, maxz)
     # Consume positions one-by-one to track progress
     height_points = []
-    _last_emit = _time.monotonic()
+    _last_emit = 0
     for i, (x, y) in enumerate(positions):
         height_points.append(get_max_height(x, y))
         # Emit progress every ~2 seconds as plain 0-100%
