@@ -107,7 +107,7 @@ class DropCutter:
                         "operation": "dropcutter",
                         "status": "running",
                         "progress_percent": round(_bt_pct, 1),
-                        "message": "Building toolpath: %d/%d points" % (_pi + 1, _num_pts),
+                        "message": "Building toolpath (%d / %d points)" % (_pi + 1, _num_pts),
                         "elapsed_seconds": round(_bt_now - _start_time, 1),
                         "final": False,
                     }), file=sys.stderr, flush=True)
