@@ -299,7 +299,7 @@ def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5,
             pct = 5.0 + 45.0 * (i + 1) / num_positions
             _emit(pct, "Computing heights: %d/%d positions" % (i + 1, num_positions))
 
-    # Phase 2: Refining Detail (50-85%)
+    # Phase 2: Refining Detail (50-82%)
     _emit(50.0, "Refining detail")
     filled = []
     _last_emit = 0
@@ -309,25 +309,14 @@ def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5,
         now = _time.monotonic()
         if (now - _last_emit) >= 2.0:
             _last_emit = now
-            pct = min(84.9, 50.0 + 35.0 * len(filled) / est_filled)
+            pct = min(81.9, 50.0 + 32.0 * len(filled) / est_filled)
             _emit(pct, "Refining detail: %d points" % len(filled))
 
-    # Phase 3: Optimizing Path (85-95%)
-    _emit(85.0, "Optimizing path")
-    result = []
-    _last_emit = 0
-    total_filled = max(1, len(filled))
-    count = 0
-    for pt in _filter_linear_points(iter(filled)):
-        result.append(pt)
-        count += 1
-        now = _time.monotonic()
-        if (now - _last_emit) >= 2.0:
-            _last_emit = now
-            pct = 85.0 + 10.0 * count / total_filled
-            _emit(pct, "Optimizing path: %d points" % len(result))
+    # Phase 3: Optimizing Path (82% — runs instantly, label only)
+    _emit(82.0, "Optimizing path")
+    result = list(_filter_linear_points(iter(filled)))
 
-    _emit(95.0, "Toolpath complete: %d points" % len(result))
+    _emit(83.0, "Toolpath complete: %d points" % len(result))
     return result
 
 

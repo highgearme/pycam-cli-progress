@@ -90,12 +90,27 @@ class DropCutter:
                 # cancel requested
                 quit_requested = True
                 break
-            for point in points:
+            # Build toolpath from computed points (83-95%)
+            _num_pts = len(points)
+            _bt_last_emit = 0
+            for _pi, point in enumerate(points):
                 if point is None:
                     # exceeded maxz - the cutter has to skip this point
                     path.append(MoveSafety())
                 else:
                     path.append(MoveStraight(point))
+                _bt_now = time.monotonic()
+                if _num_pts > 0 and (_bt_now - _bt_last_emit) >= 2.0:
+                    _bt_last_emit = _bt_now
+                    _bt_pct = 83.0 + 12.0 * (_pi + 1) / _num_pts
+                    print(json.dumps({
+                        "operation": "dropcutter",
+                        "status": "running",
+                        "progress_percent": round(_bt_pct, 1),
+                        "message": "Building toolpath: %d/%d points" % (_pi + 1, _num_pts),
+                        "elapsed_seconds": round(_bt_now - _start_time, 1),
+                        "final": False,
+                    }), file=sys.stderr, flush=True)
                 # The progress counter may return True, if cancel was requested.
                 if draw_callback and draw_callback(tool_position=point, toolpath=path):
                     quit_requested = True
@@ -104,21 +119,19 @@ class DropCutter:
             path.append(MoveSafety())
             current_line += 1
 
-            # Emit progress directly to stderr as JSON — the worker reads
-            # this without relying on the 5-layer callback chain.
-            # Use step=2/total_steps=2 with pct in 50-100 range so the
-            # worker's existing remap formula maps it to 5-100% for the UI.
-            _pct = 50.0 + 50.0 * current_line / num_of_lines
-            print(json.dumps({
-                "operation": "dropcutter",
-                "status": "running",
-                "step": 2,
-                "total_steps": 2,
-                "progress_percent": round(_pct, 1),
-                "message": "Processing line %d/%d" % (current_line, num_of_lines),
-                "elapsed_seconds": round(time.monotonic() - _start_time, 1),
-                "final": False,
-            }), file=sys.stderr, flush=True)
+            # Emit per-line progress (only useful when there are multiple lines)
+            if num_of_lines > 1:
+                _pct = 50.0 + 50.0 * current_line / num_of_lines
+                print(json.dumps({
+                    "operation": "dropcutter",
+                    "status": "running",
+                    "step": 2,
+                    "total_steps": 2,
+                    "progress_percent": round(_pct, 1),
+                    "message": "Processing line %d/%d" % (current_line, num_of_lines),
+                    "elapsed_seconds": round(time.monotonic() - _start_time, 1),
+                    "final": False,
+                }), file=sys.stderr, flush=True)
             
             if quit_requested:
                 break
