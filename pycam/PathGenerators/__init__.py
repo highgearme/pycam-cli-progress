@@ -279,27 +279,43 @@ def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5,
     import json, sys, time as _time
     # for now there is only a triangle-mesh based calculation
     get_max_height = lambda x, y: get_max_height_triangles(model, cutter, x, y, minz, maxz)
-    # Consume positions one-by-one to track progress
+
+    def _emit(pct, msg):
+        print(json.dumps({
+            "operation": "dropcutter",
+            "status": "running",
+            "progress_percent": round(pct, 1),
+            "message": msg,
+        }), file=sys.stderr, flush=True)
+
+    # Phase 1: compute heights for each position (0-50%)
     height_points = []
     _last_emit = 0
     for i, (x, y) in enumerate(positions):
         height_points.append(get_max_height(x, y))
-        # Emit progress every ~2 seconds as plain 0-100%
         now = _time.monotonic()
         if num_positions > 0 and (now - _last_emit) >= 2.0:
             _last_emit = now
-            pct = round(100.0 * (i + 1) / num_positions, 1)
-            print(json.dumps({
-                "operation": "dropcutter",
-                "status": "running",
-                "progress_percent": pct,
-                "message": "Position %d/%d" % (i + 1, num_positions),
-            }), file=sys.stderr, flush=True)
-    # Spread more positions between the existing ones.
+            pct = 50.0 * (i + 1) / num_positions
+            _emit(pct, "Position %d/%d" % (i + 1, num_positions))
+
+    # Phase 2: dynamic fill + linear filter (50-100%)
+    _emit(50.0, "Refining toolpath")
     dynamically_filled_points = _dynamic_point_fill_generator(iter(height_points), get_max_height,
                                                               max_depth)
-    # Remove all points that are in line between their neighbours.
-    return list(_filter_linear_points(dynamically_filled_points))
+    # Consume the generator manually to emit progress
+    result = []
+    _last_emit = 0
+    # Estimate: output is typically 1-2x input count
+    est_total = max(1, num_positions * 2) if num_positions > 0 else 1
+    for pt in _filter_linear_points(dynamically_filled_points):
+        result.append(pt)
+        now = _time.monotonic()
+        if (now - _last_emit) >= 2.0:
+            _last_emit = now
+            pct = min(99.0, 50.0 + 50.0 * len(result) / est_total)
+            _emit(pct, "Refining %d points" % len(result))
+    return result
 
 
 class UpdateToolView:
