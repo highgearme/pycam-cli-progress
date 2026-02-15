@@ -108,13 +108,22 @@ class DropCutter:
             # add a move to safety height after each line of moves
             path.append(MoveSafety())
             progress_counter.increment()
-            # update progress
+            current_line += 1
+            
+            # Emit progress percentage after each line completes
+            # ProgressCounter.increment() doesn't pass percent to callback, so we do it manually
+            if draw_callback and num_of_lines > 0:
+                percent = 100.0 * current_line / num_of_lines
+                draw_callback(percent=percent)
+            
+            # Diagnostic: log line completion timing
             _line_elapsed = time.monotonic() - _line_start_time
-            print("DropCutter: line %d/%d done in %.1fs"
-                  % (current_line + 1, num_of_lines, _line_elapsed),
+            print("DropCutter: line %d/%d done in %.1fs (%.1f%% complete)"
+                  % (current_line, num_of_lines, _line_elapsed, 
+                     100.0 * current_line / num_of_lines if num_of_lines > 0 else 0),
                   file=_sys.stderr, flush=True)
             _line_start_time = time.monotonic()
-            current_line += 1
+            
             if quit_requested:
                 break
         return path
