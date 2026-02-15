@@ -87,17 +87,11 @@ class DropCutter:
             # simplify the data (useful for remote processing)
             xy_coords = [(pos[0], pos[1]) for pos in one_grid_line]
             args.append((xy_coords, minz, maxz, model, cutter, dynamic_fill_max_depth))
-        
-        # Disable multiprocessing when draw_callback exists (progress reporting needed).
-        # Multiprocessing workers can't invoke callbacks during execution, so progress
-        # only updates after ALL lines complete (defeats the purpose). Serial execution
-        # allows callback after each line for smooth progress: 5% → 6% → 7% ... → 100%.
-        disable_parallel = draw_callback is not None
-        
         _line_start_time = time.monotonic()
+        # ProgressCounter.update is called by run_in_parallel after each worker completes,
+        # even in multiprocessing mode. It calculates percent and forwards to draw_callback.
         for points in run_in_parallel(_process_one_grid_line, args,
-                                      callback=progress_counter.update,
-                                      disable_multiprocessing=disable_parallel):
+                                      callback=progress_counter.update):
             if draw_callback and draw_callback(
                     text="DropCutter: processing line %d/%d" % (current_line + 1, num_of_lines)):
                 # cancel requested
@@ -115,14 +109,9 @@ class DropCutter:
                     break
             # add a move to safety height after each line of moves
             path.append(MoveSafety())
+            # Increment progress counter - automatically calculates percent and calls draw_callback
             progress_counter.increment()
             current_line += 1
-            
-            # Emit progress percentage after each line completes
-            # ProgressCounter.increment() doesn't pass percent to callback, so we do it manually
-            if draw_callback and num_of_lines > 0:
-                percent = 100.0 * current_line / num_of_lines
-                draw_callback(percent=percent)
             
             # Diagnostic: log line completion timing
             _line_elapsed = time.monotonic() - _line_start_time
