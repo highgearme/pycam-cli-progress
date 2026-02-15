@@ -88,10 +88,10 @@ class DropCutter:
             xy_coords = [(pos[0], pos[1]) for pos in one_grid_line]
             args.append((xy_coords, minz, maxz, model, cutter, dynamic_fill_max_depth))
         _line_start_time = time.monotonic()
-        # ProgressCounter.update is called by run_in_parallel after each worker completes,
-        # even in multiprocessing mode. It calculates percent and forwards to draw_callback.
+        # Pass increment (not update) so current_value increments as each worker completes.
+        # update() just reads current_value; increment() increments THEN calls update().
         for points in run_in_parallel(_process_one_grid_line, args,
-                                      callback=progress_counter.update):
+                                      callback=progress_counter.increment):
             if draw_callback and draw_callback(
                     text="DropCutter: processing line %d/%d" % (current_line + 1, num_of_lines)):
                 # cancel requested
@@ -109,8 +109,7 @@ class DropCutter:
                     break
             # add a move to safety height after each line of moves
             path.append(MoveSafety())
-            # Increment progress counter - automatically calculates percent and calls draw_callback
-            progress_counter.increment()
+            # Progress counter already incremented by run_in_parallel callback
             current_line += 1
             
             # Diagnostic: log line completion timing
