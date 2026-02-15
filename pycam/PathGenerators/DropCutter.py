@@ -87,9 +87,17 @@ class DropCutter:
             # simplify the data (useful for remote processing)
             xy_coords = [(pos[0], pos[1]) for pos in one_grid_line]
             args.append((xy_coords, minz, maxz, model, cutter, dynamic_fill_max_depth))
+        
+        # Disable multiprocessing when draw_callback exists (progress reporting needed).
+        # Multiprocessing workers can't invoke callbacks during execution, so progress
+        # only updates after ALL lines complete (defeats the purpose). Serial execution
+        # allows callback after each line for smooth progress: 5% → 6% → 7% ... → 100%.
+        disable_parallel = draw_callback is not None
+        
         _line_start_time = time.monotonic()
         for points in run_in_parallel(_process_one_grid_line, args,
-                                      callback=progress_counter.update):
+                                      callback=progress_counter.update,
+                                      disable_multiprocessing=disable_parallel):
             if draw_callback and draw_callback(
                     text="DropCutter: processing line %d/%d" % (current_line + 1, num_of_lines)):
                 # cancel requested
