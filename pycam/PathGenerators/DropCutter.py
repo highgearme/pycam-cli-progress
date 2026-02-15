@@ -90,7 +90,7 @@ class DropCutter:
                 # cancel requested
                 quit_requested = True
                 break
-            # Build toolpath from computed points (82-97%)
+            # Build toolpath from computed points (83-98%)
             _num_pts = len(points)
             _bt_last_emit = 0
             for _pi, point in enumerate(points):
@@ -102,7 +102,7 @@ class DropCutter:
                 _bt_now = time.monotonic()
                 if _num_pts > 0 and (_bt_now - _bt_last_emit) >= 2.0:
                     _bt_last_emit = _bt_now
-                    _bt_pct = 82.0 + 15.0 * (_pi + 1) / _num_pts
+                    _bt_pct = 83.0 + 15.0 * (_pi + 1) / _num_pts
                     print(json.dumps({
                         "operation": "dropcutter",
                         "status": "running",
