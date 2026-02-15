@@ -18,7 +18,9 @@ You should have received a copy of the GNU General Public License
 along with PyCAM.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+import json
 import os
+import sys
 import time
 
 import pycam.Geometry.Model
@@ -70,26 +72,14 @@ class DropCutter:
         progress_counter = ProgressCounter(len(lines), draw_callback)
         current_line = 0
 
-        # Diagnostic: report grid size so worker logs can explain slow progress.
-        # Use print(stderr) not log.warning() — PyCAM's logging system may not
-        # have a handler configured for stderr in headless mode, but the worker's
-        # progress monitor reads stderr directly.
-        import sys as _sys
-        if lines:
-            avg_positions = sum(len(line) for line in lines) / len(lines)
-            print("DropCutter: %d grid lines, ~%d positions/line, max_depth=%d (before dynamic fill)"
-                  % (num_of_lines, int(avg_positions), dynamic_fill_max_depth), file=_sys.stderr, flush=True)
-        else:
-            print("DropCutter: 0 grid lines — nothing to process", file=_sys.stderr, flush=True)
-
         args = []
         for one_grid_line in lines:
             # simplify the data (useful for remote processing)
             xy_coords = [(pos[0], pos[1]) for pos in one_grid_line]
             args.append((xy_coords, minz, maxz, model, cutter, dynamic_fill_max_depth))
-        _line_start_time = time.monotonic()
-        # Pass increment (not update) so current_value increments as each worker completes.
-        # update() just reads current_value; increment() increments THEN calls update().
+        _start_time = time.monotonic()
+        print("DropCutter: %d grid lines, max_depth=%d"
+              % (num_of_lines, dynamic_fill_max_depth), file=sys.stderr, flush=True)
         for points in run_in_parallel(_process_one_grid_line, args,
                                       callback=progress_counter.increment):
             if draw_callback and draw_callback(
@@ -109,16 +99,23 @@ class DropCutter:
                     break
             # add a move to safety height after each line of moves
             path.append(MoveSafety())
-            # Progress counter already incremented by run_in_parallel callback
             current_line += 1
-            
-            # Diagnostic: log line completion timing
-            _line_elapsed = time.monotonic() - _line_start_time
-            print("DropCutter: line %d/%d done in %.1fs (%.1f%% complete)"
-                  % (current_line, num_of_lines, _line_elapsed, 
-                     100.0 * current_line / num_of_lines if num_of_lines > 0 else 0),
-                  file=_sys.stderr, flush=True)
-            _line_start_time = time.monotonic()
+
+            # Emit progress directly to stderr as JSON — the worker reads
+            # this without relying on the 5-layer callback chain.
+            # Use step=2/total_steps=2 with pct in 50-100 range so the
+            # worker's existing remap formula maps it to 5-100% for the UI.
+            _pct = 50.0 + 50.0 * current_line / num_of_lines
+            print(json.dumps({
+                "operation": "dropcutter",
+                "status": "running",
+                "step": 2,
+                "total_steps": 2,
+                "progress_percent": round(_pct, 1),
+                "message": "Processing line %d/%d" % (current_line, num_of_lines),
+                "elapsed_seconds": round(time.monotonic() - _start_time, 1),
+                "final": False,
+            }), file=sys.stderr, flush=True)
             
             if quit_requested:
                 break
