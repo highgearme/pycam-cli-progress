@@ -298,24 +298,36 @@ class UpdateToolView:
         self.current_tool_position = None
 
     def update(self, text=None, percent=None, tool_position=None, toolpath=None):
-        if toolpath is not None:
-            self.core.set("toolpath_in_progress", toolpath)
-        # always store the most recently reported tool_position for the next visualization
-        if tool_position is not None:
-            self.current_tool_position = tool_position
-        redraw_wanted = False
-        current_time = time.time()
-        if (current_time - self.last_update_time) > 1.0 / self.max_fps:
-            if self.current_tool_position != self.last_tool_position:
-                tool = self.core.get("current_tool")
-                if tool:
-                    tool.moveto(self.current_tool_position)
-                self.last_tool_position = self.current_tool_position
-                redraw_wanted = True
-            if self.core.get("show_toolpath_progress"):
-                redraw_wanted = True
-            self.last_update_time = current_time
-            if redraw_wanted:
-                self.core.emit_event("visual-item-updated")
-        # break the loop if someone clicked the "cancel" button
-        return self.callback(text=text, percent=percent)
+        # Always forward to callback first (critical for headless progress tracking)
+        # GUI visualization is secondary and may fail in headless mode
+        callback_result = None
+        if self.callback:
+            callback_result = self.callback(text=text, percent=percent)
+        
+        # GUI visualization (may fail in headless mode, non-critical)
+        try:
+            if toolpath is not None:
+                self.core.set("toolpath_in_progress", toolpath)
+            # always store the most recently reported tool_position for the next visualization
+            if tool_position is not None:
+                self.current_tool_position = tool_position
+            redraw_wanted = False
+            current_time = time.time()
+            if (current_time - self.last_update_time) > 1.0 / self.max_fps:
+                if self.current_tool_position != self.last_tool_position:
+                    tool = self.core.get("current_tool")
+                    if tool:
+                        tool.moveto(self.current_tool_position)
+                    self.last_tool_position = self.current_tool_position
+                    redraw_wanted = True
+                if self.core.get("show_toolpath_progress"):
+                    redraw_wanted = True
+                self.last_update_time = current_time
+                if redraw_wanted:
+                    self.core.emit_event("visual-item-updated")
+        except (AttributeError, KeyError, TypeError):
+            # Headless mode: self.core may be None or missing methods
+            pass
+        
+        # Return callback result (may indicate cancel requested)
+        return callback_result
