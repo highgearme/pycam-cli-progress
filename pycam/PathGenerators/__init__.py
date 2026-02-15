@@ -288,7 +288,7 @@ def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5,
             "message": msg,
         }), file=sys.stderr, flush=True)
 
-    # Phase 1: compute heights for each position (0-50%)
+    # Phase 1: Computing Heights (5-50%)
     height_points = []
     _last_emit = 0
     for i, (x, y) in enumerate(positions):
@@ -296,25 +296,38 @@ def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5,
         now = _time.monotonic()
         if num_positions > 0 and (now - _last_emit) >= 2.0:
             _last_emit = now
-            pct = 50.0 * (i + 1) / num_positions
-            _emit(pct, "Position %d/%d" % (i + 1, num_positions))
+            pct = 5.0 + 45.0 * (i + 1) / num_positions
+            _emit(pct, "Computing heights: %d/%d positions" % (i + 1, num_positions))
 
-    # Phase 2: dynamic fill + linear filter (50-100%)
-    _emit(50.0, "Refining toolpath")
-    dynamically_filled_points = _dynamic_point_fill_generator(iter(height_points), get_max_height,
-                                                              max_depth)
-    # Consume the generator manually to emit progress
-    result = []
+    # Phase 2: Refining Detail (50-85%)
+    _emit(50.0, "Refining detail")
+    filled = []
     _last_emit = 0
-    # Estimate: output is typically 1-2x input count
-    est_total = max(1, num_positions * 2) if num_positions > 0 else 1
-    for pt in _filter_linear_points(dynamically_filled_points):
-        result.append(pt)
+    est_filled = max(1, num_positions * 2) if num_positions > 0 else 1
+    for pt in _dynamic_point_fill_generator(iter(height_points), get_max_height, max_depth):
+        filled.append(pt)
         now = _time.monotonic()
         if (now - _last_emit) >= 2.0:
             _last_emit = now
-            pct = min(99.0, 50.0 + 50.0 * len(result) / est_total)
-            _emit(pct, "Refining %d points" % len(result))
+            pct = min(84.9, 50.0 + 35.0 * len(filled) / est_filled)
+            _emit(pct, "Refining detail: %d points" % len(filled))
+
+    # Phase 3: Optimizing Path (85-95%)
+    _emit(85.0, "Optimizing path")
+    result = []
+    _last_emit = 0
+    total_filled = max(1, len(filled))
+    count = 0
+    for pt in _filter_linear_points(iter(filled)):
+        result.append(pt)
+        count += 1
+        now = _time.monotonic()
+        if (now - _last_emit) >= 2.0:
+            _last_emit = now
+            pct = 85.0 + 10.0 * count / total_filled
+            _emit(pct, "Optimizing path: %d points" % len(result))
+
+    _emit(95.0, "Toolpath complete: %d points" % len(result))
     return result
 
 
