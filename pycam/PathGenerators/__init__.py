@@ -288,7 +288,7 @@ def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5,
             "message": msg,
         }), file=sys.stderr, flush=True)
 
-    # Phase 1: Computing Heights (5-50%)
+    # Phase 1: Computing Heights (5-48%)
     height_points = []
     _last_emit = 0
     for i, (x, y) in enumerate(positions):
@@ -296,10 +296,10 @@ def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5,
         now = _time.monotonic()
         if num_positions > 0 and (now - _last_emit) >= 2.0:
             _last_emit = now
-            pct = 5.0 + 45.0 * (i + 1) / num_positions
+            pct = 5.0 + 43.0 * (i + 1) / num_positions
             _emit(pct, "Computing heights (%d / %d positions)" % (i + 1, num_positions))
 
-    # Phase 2: Refining Detail (50-82%)
+    # Phase 2: Refining Detail (48-82%)
     filled = []
     _last_emit = 0
     est_filled = max(1, num_positions * 2) if num_positions > 0 else 1
@@ -308,12 +308,12 @@ def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5,
         now = _time.monotonic()
         if (now - _last_emit) >= 2.0:
             _last_emit = now
-            pct = min(81.9, 50.0 + 32.0 * len(filled) / est_filled)
+            pct = min(81.9, 48.0 + 34.0 * len(filled) / est_filled)
             _emit(pct, "Refining detail (%d points)" % len(filled))
 
-    # Phase 3: Optimizing Path (82-83% — runs instantly)
+    # Phase 3: Optimizing Path (82% — runs instantly)
     result = list(_filter_linear_points(iter(filled)))
-    _emit(83.0, "Optimizing path (%d points, done)" % len(result))
+    _emit(82.0, "Optimizing path (%d points, done)" % len(result))
     return result
 
 
