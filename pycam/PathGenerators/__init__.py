@@ -284,7 +284,7 @@ def get_max_height_dynamic(model, cutter, positions, minz, maxz, max_depth=5,
         print(json.dumps({
             "operation": "dropcutter",
             "status": "running",
-            "progress_percent": round(pct, 1),
+            "progress_percent": int(pct),
             "message": msg,
         }), file=sys.stderr, flush=True)
 

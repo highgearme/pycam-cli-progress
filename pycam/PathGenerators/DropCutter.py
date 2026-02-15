@@ -106,7 +106,7 @@ class DropCutter:
                     print(json.dumps({
                         "operation": "dropcutter",
                         "status": "running",
-                        "progress_percent": round(_bt_pct, 1),
+                        "progress_percent": int(_bt_pct),
                         "message": "Building toolpath (%d / %d points)" % (_pi + 1, _num_pts),
                         "elapsed_seconds": round(_bt_now - _start_time, 1),
                         "final": False,
@@ -127,7 +127,7 @@ class DropCutter:
                     "status": "running",
                     "step": 2,
                     "total_steps": 2,
-                    "progress_percent": round(_pct, 1),
+                    "progress_percent": int(_pct),
                     "message": "Processing line %d/%d" % (current_line, num_of_lines),
                     "elapsed_seconds": round(time.monotonic() - _start_time, 1),
                     "final": False,
