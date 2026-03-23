@@ -55,3 +55,21 @@ class PathPatternGrid(pycam.Plugins.PluginBase):
 
     def teardown(self):
         self.core.get("unregister_parameter_set")("path_pattern", "grid")
+
+
+class PathPatternSerpentine(pycam.Plugins.PluginBase):
+
+    DEPENDS = ["ParameterGroupManager", "PathParamPattern", "PathParamMillingStyle",
+               "PathParamGridDirection"]
+    CATEGORIES = ["Process", "Path pattern"]
+
+    def setup(self):
+        parameters = {"milling_style": pycam.Toolpath.MotionGrid.MillingStyle.IGNORE,
+                      "grid_direction": pycam.Toolpath.MotionGrid.GridDirection.X}
+        self.core.get("register_parameter_set")("path_pattern", "serpentine",
+                                                "Serpentine", None,
+                                                parameters=parameters, weight=20)
+        return True
+
+    def teardown(self):
+        self.core.get("unregister_parameter_set")("path_pattern", "serpentine")

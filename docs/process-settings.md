@@ -73,6 +73,31 @@ Path Direction
 
 Specify if the toolpath lines should move along the X or the Y axis.
 
+Path Pattern
+------------
+
+The path pattern controls the shape of the toolpath within each layer.
+
+### Grid
+
+The default *Grid* pattern generates parallel lines in the selected
+direction. The milling style determines whether all lines move in the
+same direction (conventional or climb) or alternate direction (ignore).
+
+### Spiral
+
+The *Spiral* pattern generates an inward or outward spiral path.
+Configure the spiral direction and optionally enable rounded corners.
+
+### Serpentine
+
+The *Serpentine* pattern generates a zigzag (back-and-forth) path
+independent of the milling style. Unlike the *Grid* pattern with
+*Ignore* milling style, the serpentine pattern allows you to combine
+zigzag movement with a specific milling style (conventional or climb).
+This is useful when you want to minimize rapid moves at safety height
+while still controlling the cutting direction on the first pass.
+
 Milling style
 -------------
 

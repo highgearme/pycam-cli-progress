@@ -118,11 +118,12 @@ def get_fixed_grid_line(start, end, line_pos, z, step_width=None, grid_direction
 
 def get_fixed_grid_layer(minx, maxx, miny, maxy, z, line_distance, step_width=None,
                          grid_direction=GridDirection.X, milling_style=MillingStyle.IGNORE,
-                         start_position=StartPosition.NONE):
+                         start_position=StartPosition.NONE, zigzag=None):
     if grid_direction == GridDirection.XY:
         raise ValueError("'get_one_layer_fixed_grid' does not accept XY direction")
-    # zigzag is only available if the milling
-    zigzag = (milling_style == MillingStyle.IGNORE)
+    # zigzag is only available if the milling style is IGNORE, unless explicitly overridden
+    if zigzag is None:
+        zigzag = (milling_style == MillingStyle.IGNORE)
 
     # If we happen to start at a position that collides with the milling style,
     # then we need to move to the closest other corner. Here we decide, which
@@ -214,10 +215,13 @@ def get_fixed_grid_layer(minx, maxx, miny, maxy, z, line_distance, step_width=No
 
 def get_fixed_grid(box, layer_distance, line_distance, step_width=None,
                    grid_direction=GridDirection.X, milling_style=MillingStyle.IGNORE,
-                   start_position=StartPosition.Z, use_fixed_start_position=False):
+                   start_position=StartPosition.Z, use_fixed_start_position=False,
+                   zigzag=None):
     """ Calculate the grid positions for toolpath moves
 
     @param use_fixed_start_position: the moves for every layer start at the same position
+    @param zigzag: override the zigzag behavior (None=derive from milling_style,
+        True=force zigzag, False=force no zigzag)
     """
     assert isinstance(milling_style, MillingStyle)
     assert isinstance(grid_direction, GridDirection)
@@ -243,7 +247,7 @@ def get_fixed_grid(box, layer_distance, line_distance, step_width=None,
         result, suggested_start_position = get_fixed_grid_layer(
             box.lower.x, box.upper.x, box.lower.y, box.upper.y, z, line_distance,
             step_width=step_width, grid_direction=direction, milling_style=milling_style,
-            start_position=start_position)
+            start_position=start_position, zigzag=zigzag)
         if not use_fixed_start_position:
             start_position = suggested_start_position
         yield result

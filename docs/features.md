@@ -67,6 +67,7 @@ Cutter) and the path strategy.
     Engraving
 -   Milling style: conventional / climb / minimize movements
 -   Grid direction: x, y or both
+-   Path pattern: grid, spiral or serpentine
 -   Material Allowance: amount of material to remain around the model
 -   Overlap: how far parallel toolpath should overlap
 -   Step down: maximum height of material to be abraded with one slice
