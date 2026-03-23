@@ -91,12 +91,42 @@ Configure the spiral direction and optionally enable rounded corners.
 
 ### Serpentine
 
-The *Serpentine* pattern generates a connected back-and-forth path
-independent of the milling style. Unlike the *Grid* pattern with
-*Ignore* milling style, the serpentine pattern allows you to combine
-back-and-forth movement with a specific milling style (conventional or
-climb). This is useful when you want to minimize rapid moves at safety
-height while still controlling the cutting direction on the first pass.
+The *Serpentine* pattern generates a connected back-and-forth (raster)
+path where the tool reverses direction at the end of each line, moving
+directly to the next line without lifting to the safety height.
+
+Unlike the *Grid* pattern with *Ignore* milling style (which also
+alternates direction), the serpentine pattern lets you pair back-and-forth
+movement with a specific milling style. The chosen milling style
+(conventional or climb) only controls the **first** pass direction; each
+subsequent pass reverses regardless.
+
+Choose *Serpentine* over *Grid + Ignore* when you want to:
+
+- Minimize rapid moves at safety height on machines with slow Z travel.
+- Control whether the first pass cuts conventionally or in climb direction.
+- Reduce total machining time on large flat areas.
+
+**YAML configuration example:**
+
+```yaml
+processes:
+    rough_serpentine:
+        strategy: slice
+        path_pattern: serpentine
+        milling_style: conventional  # controls first-pass direction
+        grid_direction: x            # lines run along X axis
+        overlap: 0.10
+        step_down: 3.0
+```
+
+Valid values:
+
+- `milling_style`: `conventional`, `climb`, or `ignore`
+- `grid_direction`: `x`, `y`, or `xy`
+
+The serpentine pattern is supported by both the *Slice removal* and
+*Surfacing* strategies.
 
 Milling style
 -------------
