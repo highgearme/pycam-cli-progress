@@ -28,6 +28,7 @@ class ProcessStrategy(Enum):
 class PathPattern(Enum):
     SPIRAL = "spiral"
     GRID = "grid"
+    SERPENTINE = "serpentine"
 
 
 class BoundsSpecification(Enum):

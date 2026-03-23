@@ -113,6 +113,13 @@ processes:
                 step_down: 1.0
                 grid_direction: x
                 milling_style: ignore
+        process_slicing_serpentine:
+                strategy: slice
+                path_pattern: serpentine
+                overlap: 0.10
+                step_down: 1.0
+                grid_direction: x
+                milling_style: conventional
         process_engrave:
                 strategy: engrave
                 step_down: 1.0

@@ -118,11 +118,13 @@ def get_fixed_grid_line(start, end, line_pos, z, step_width=None, grid_direction
 
 def get_fixed_grid_layer(minx, maxx, miny, maxy, z, line_distance, step_width=None,
                          grid_direction=GridDirection.X, milling_style=MillingStyle.IGNORE,
-                         start_position=StartPosition.NONE):
+                         start_position=StartPosition.NONE, serpentine=None):
     if grid_direction == GridDirection.XY:
         raise ValueError("'get_one_layer_fixed_grid' does not accept XY direction")
-    # zigzag is only available if the milling
-    zigzag = (milling_style == MillingStyle.IGNORE)
+    # serpentine (back-and-forth) is the default when milling style is IGNORE,
+    # unless explicitly overridden
+    if serpentine is None:
+        serpentine = (milling_style == MillingStyle.IGNORE)
 
     # If we happen to start at a position that collides with the milling style,
     # then we need to move to the closest other corner. Here we decide, which
@@ -176,7 +178,7 @@ def get_fixed_grid_layer(minx, maxx, miny, maxy, z, line_distance, step_width=No
     # at the end of the layer we will be on the other side of the 2nd direction
     end_position = start_position ^ secondary_dir
     # the final position will probably be on the other side (primary)
-    if not zigzag:
+    if not serpentine:
         end_position ^= primary_dir
 
     # calculate each line
@@ -185,28 +187,28 @@ def get_fixed_grid_layer(minx, maxx, miny, maxy, z, line_distance, step_width=No
         for line_pos in lines:
             result.append(get_fixed_grid_line(start, end, line_pos, z, step_width=step_width,
                                               grid_direction=grid_direction))
-            if zigzag:
+            if serpentine:
                 start, end = end, start
                 end_position ^= primary_dir
-        if zigzag and step_width:
-            # Connect endpoints of zigzag lines (prevent unnecessary safety moves).
+        if serpentine and step_width:
+            # Connect endpoints of serpentine lines (prevent unnecessary safety moves).
             # (DropCutter)
-            zigzag_result = []
+            serpentine_result = []
             for line in result:
-                zigzag_result.extend(line)
+                serpentine_result.extend(line)
             # return a list containing a single chain of lines
-            result = [zigzag_result]
-        elif zigzag and step_width is None:
+            result = [serpentine_result]
+        elif serpentine and step_width is None:
             # Add a pair of end_before/start_next points between two lines.
             # (PushCutter)
-            zigzag_result = []
+            serpentine_result = []
             last = None
             for (p1, p2) in result:
                 if last:
-                    zigzag_result.append((last, p1))
-                zigzag_result.append((p1, p2))
+                    serpentine_result.append((last, p1))
+                serpentine_result.append((p1, p2))
                 last = p2
-            result = zigzag_result
+            result = serpentine_result
         return result, end_position
 
     return get_lines(start, end, end_position)
@@ -214,10 +216,13 @@ def get_fixed_grid_layer(minx, maxx, miny, maxy, z, line_distance, step_width=No
 
 def get_fixed_grid(box, layer_distance, line_distance, step_width=None,
                    grid_direction=GridDirection.X, milling_style=MillingStyle.IGNORE,
-                   start_position=StartPosition.Z, use_fixed_start_position=False):
+                   start_position=StartPosition.Z, use_fixed_start_position=False,
+                   serpentine=None):
     """ Calculate the grid positions for toolpath moves
 
     @param use_fixed_start_position: the moves for every layer start at the same position
+    @param serpentine: override the serpentine (back-and-forth) behavior
+        (None=derive from milling_style, True=force serpentine, False=force no serpentine)
     """
     assert isinstance(milling_style, MillingStyle)
     assert isinstance(grid_direction, GridDirection)
@@ -243,7 +248,7 @@ def get_fixed_grid(box, layer_distance, line_distance, step_width=None,
         result, suggested_start_position = get_fixed_grid_layer(
             box.lower.x, box.upper.x, box.lower.y, box.upper.y, z, line_distance,
             step_width=step_width, grid_direction=direction, milling_style=milling_style,
-            start_position=start_position)
+            start_position=start_position, serpentine=serpentine)
         if not use_fixed_start_position:
             start_position = suggested_start_position
         yield result
