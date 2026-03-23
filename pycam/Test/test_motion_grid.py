@@ -81,7 +81,7 @@ class TestMotionGrid(unittest.TestCase):
 
     def test_fixed_grid_layer(self):
         for z in (-1, 0, 1):
-            # simple zigzag moves
+            # simple serpentine (back-and-forth) moves
             layer, end_position = get_fixed_grid_layer(
                 0, 2, 0, 1, z, line_distance=1, grid_direction=GridDirection.X,
                 milling_style=MillingStyle.IGNORE, start_position=StartPosition.NONE)
@@ -123,42 +123,42 @@ class TestMotionGrid(unittest.TestCase):
             self.assertEqual(end_position, StartPosition.X)
 
     def test_fixed_grid_layer_serpentine(self):
-        """Test that zigzag=True forces serpentine behavior independent of milling_style."""
+        """Test that serpentine=True forces back-and-forth independent of milling_style."""
         for z in (-1, 0, 1):
-            # serpentine with CONVENTIONAL: zigzag despite milling_style
+            # serpentine with CONVENTIONAL: back-and-forth despite milling_style
             layer, end_position = get_fixed_grid_layer(
                 0, 2, 0, 1, z, line_distance=1, grid_direction=GridDirection.X,
                 milling_style=MillingStyle.CONVENTIONAL, start_position=StartPosition.NONE,
-                zigzag=True)
+                serpentine=True)
             layer = _resolve_nested(2, layer)
             # first line goes forward (0→2), connecting move, second line backward (2→0)
             self.assert_almost_equal_layer(layer, (
                 ((0, 0, z), (2, 0, z)), ((2, 0, z), (2, 1, z)), ((2, 1, z), (0, 1, z))))
             self.assertEqual(end_position, StartPosition.Y)
-            # serpentine with CLIMB: zigzag despite milling_style
+            # serpentine with CLIMB: back-and-forth despite milling_style
             # CLIMB adjusts start position, so lines start from y=1 going down
             layer, end_position = get_fixed_grid_layer(
                 0, 2, 0, 1, z, line_distance=1, grid_direction=GridDirection.X,
                 milling_style=MillingStyle.CLIMB, start_position=StartPosition.NONE,
-                zigzag=True)
+                serpentine=True)
             layer = _resolve_nested(2, layer)
             self.assert_almost_equal_layer(layer, (
                 ((0, 1, z), (2, 1, z)), ((2, 1, z), (2, 0, z)), ((2, 0, z), (0, 0, z))))
             self.assertEqual(end_position, StartPosition.NONE)
-            # zigzag=False disables zigzag even with IGNORE
+            # serpentine=False disables back-and-forth even with IGNORE
             layer, end_position = get_fixed_grid_layer(
                 0, 2, 0, 1, z, line_distance=1, grid_direction=GridDirection.X,
                 milling_style=MillingStyle.IGNORE, start_position=StartPosition.NONE,
-                zigzag=False)
+                serpentine=False)
             layer = _resolve_nested(2, layer)
-            # without zigzag, both lines go in the same direction
+            # without serpentine, both lines go in the same direction
             self.assert_almost_equal_layer(layer, (
                 ((0, 0, z), (2, 0, z)), ((0, 1, z), (2, 1, z))))
-            # zigzag=None defaults to milling_style-derived behavior
+            # serpentine=None defaults to milling_style-derived behavior
             layer_default, _ = get_fixed_grid_layer(
                 0, 2, 0, 1, z, line_distance=1, grid_direction=GridDirection.X,
                 milling_style=MillingStyle.IGNORE, start_position=StartPosition.NONE,
-                zigzag=None)
+                serpentine=None)
             layer_default = _resolve_nested(2, layer_default)
             layer_ignore, _ = get_fixed_grid_layer(
                 0, 2, 0, 1, z, line_distance=1, grid_direction=GridDirection.X,
@@ -167,14 +167,14 @@ class TestMotionGrid(unittest.TestCase):
             self.assert_almost_equal_layer(layer_default, layer_ignore)
 
     def test_fixed_grid_serpentine(self):
-        """Test that zigzag parameter threads through get_fixed_grid."""
+        """Test that serpentine parameter threads through get_fixed_grid."""
         box = Box3D(Point3D(-3, -2, -1), Point3D(3, 2, 1))
-        # serpentine grid with CONVENTIONAL should produce zigzag lines
+        # serpentine grid with CONVENTIONAL should produce back-and-forth lines
         grid = _resolve_nested(3, get_fixed_grid(
             box, 1.2, line_distance=2.0, step_width=None,
             grid_direction=GridDirection.X, milling_style=MillingStyle.CONVENTIONAL,
-            start_position=StartPosition.Z, zigzag=True))
-        # with zigzag=True, lines within each layer form a connected serpentine path
+            start_position=StartPosition.Z, serpentine=True))
+        # with serpentine=True, lines within each layer form a connected back-and-forth path
         self.assert_almost_equal_grid(grid, (
             (((-3, -2, 1), (3, -2, 1)), ((3, -2, 1), (3, 0, 1)),
              ((3, 0, 1), (-3, 0, 1)), ((-3, 0, 1), (-3, 2, 1)),

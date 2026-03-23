@@ -1156,7 +1156,7 @@ class Process(BaseCollectionItemDataContainer):
                 elif path_pattern == PathPattern.SERPENTINE:
                     func = functools.partial(MotionGrid.get_fixed_grid,
                                              grid_direction=self.get_value("grid_direction"),
-                                             zigzag=True)
+                                             serpentine=True)
                 else:
                     raise InvalidKeyError(path_pattern, PathPattern)
                 motion_grid = func(box, self.get_value("step_down"), line_distance=line_distance,
@@ -1184,7 +1184,7 @@ class Process(BaseCollectionItemDataContainer):
                 elif path_pattern == PathPattern.SERPENTINE:
                     func = functools.partial(MotionGrid.get_fixed_grid,
                                              grid_direction=self.get_value("grid_direction"),
-                                             zigzag=True)
+                                             serpentine=True)
                 else:
                     raise InvalidKeyError(path_pattern, PathPattern)
                 # surfacing requires a finer grid (arbitrary factor)

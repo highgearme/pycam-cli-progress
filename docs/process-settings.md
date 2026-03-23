@@ -91,12 +91,12 @@ Configure the spiral direction and optionally enable rounded corners.
 
 ### Serpentine
 
-The *Serpentine* pattern generates a zigzag (back-and-forth) path
+The *Serpentine* pattern generates a connected back-and-forth path
 independent of the milling style. Unlike the *Grid* pattern with
 *Ignore* milling style, the serpentine pattern allows you to combine
-zigzag movement with a specific milling style (conventional or climb).
-This is useful when you want to minimize rapid moves at safety height
-while still controlling the cutting direction on the first pass.
+back-and-forth movement with a specific milling style (conventional or
+climb). This is useful when you want to minimize rapid moves at safety
+height while still controlling the cutting direction on the first pass.
 
 Milling style
 -------------
